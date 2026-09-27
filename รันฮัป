@@ -1,0 +1,547 @@
+-- ==========================================================
+-- [BLOCK SPIN PRO HUB - RAINBOW BEAM & AUTO LIFT FARM]
+-- ==========================================================
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local MinimizedTabName = "TikTok: @bb_official" 
+
+-- ค่าสถานะฟังก์ชันทั้งหมด
+local InvisibleEnabled = false
+local ESPEnabled = false
+local SkeletonESPEnabled = false
+local TracerEnabled = false
+local AimbotEnabled = false
+local FOVEnabled = false
+local AutoLiftEnabled = false -- ฟังก์ชันยกของเพิ่มใหม่
+local FOVRadius = 140
+
+-- สร้าง ScreenGui หลัก
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "BB_BlockSpin_BeamHub"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true 
+
+local success, err = pcall(function()
+    ScreenGui.Parent = gethui and gethui() or CoreGui
+end)
+if not success then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- ==========================================================
+-- ฟังก์ชันแสดงข้อความแจ้งเตือน (เช่น ตรวจพบการเทเลพอร์ต)
+-- ==========================================================
+local function showNotify(msg)
+    task.spawn(function()
+        local notifyFrame = Instance.new("Frame")
+        notifyFrame.Size = UDim2.new(0, 220, 0, 30)
+        notifyFrame.Position = UDim2.new(0.5, -110, 0.7, 0)
+        notifyFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+        notifyFrame.BackgroundTransparency = 0.2
+        notifyFrame.Parent = ScreenGui
+
+        local corner = Instance.new("UICorner", notifyFrame)
+        corner.CornerRadius = UDim.new(0, 6)
+
+        local stroke = Instance.new("UIStroke", notifyFrame)
+        stroke.Color = Color3.fromRGB(255, 170, 0)
+        stroke.Thickness = 1.5
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Text = msg
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 13
+        label.Parent = notifyFrame
+
+        task.wait(1)
+        local t1 = TweenService:Create(notifyFrame, TweenInfo.new(0.3), {BackgroundTransparency = 1})
+        local t2 = TweenService:Create(label, TweenInfo.new(0.3), {TextTransparency = 1})
+        t1:Play()
+        t2:Play()
+        t1.Completed:Wait()
+        notifyFrame:Destroy()
+    end)
+end
+
+-- ==========================================================
+-- ฟังก์ชันสร้าง Beam
+-- ==========================================================
+local function makeBeam(part0, part1)
+    local a0 = Instance.new("Attachment")
+    a0.Parent = part0
+
+    local a1 = Instance.new("Attachment")
+    a1.Parent = part1
+
+    local beam = Instance.new("Beam")
+    beam.Attachment0 = a0
+    beam.Attachment1 = a1
+    beam.Width0 = 0.08
+    beam.Width1 = 0.08
+    beam.FaceCamera = true
+    beam.Parent = part0
+
+    return beam, a0, a1
+end
+
+-- ==========================================================
+-- วง FOV สีรุ้งกลางจอ
+-- ==========================================================
+local FOVFrame = Instance.new("Frame")
+FOVFrame.Name = "RainbowFOVCircle"
+FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+FOVFrame.Size = UDim2.new(0, FOVRadius * 2, 0, FOVRadius * 2)
+FOVFrame.BackgroundTransparency = 1
+FOVFrame.Visible = false
+FOVFrame.Parent = ScreenGui
+
+local FOVUIStroke = Instance.new("UIStroke")
+FOVUIStroke.Thickness = 2.5
+FOVUIStroke.Parent = FOVFrame
+
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVFrame
+
+RunService.RenderStepped:Connect(function()
+    FOVFrame.Size = UDim2.new(0, FOVRadius * 2, 0, FOVRadius * 2)
+    if FOVEnabled then
+        FOVUIStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+        FOVFrame.Visible = true
+    else
+        FOVFrame.Visible = false
+    end
+end)
+
+-- ==========================================================
+-- 1. Intro จอดำ 5 วินาที
+-- ==========================================================
+local IntroFrame = Instance.new("Frame")
+IntroFrame.Size = UDim2.new(1, 0, 1, 0)
+IntroFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+IntroFrame.BorderSizePixel = 0
+IntroFrame.ZIndex = 99999
+IntroFrame.Parent = ScreenGui
+
+local IntroText = Instance.new("TextLabel")
+IntroText.Size = UDim2.new(1, 0, 1, 0)
+IntroText.BackgroundTransparency = 1
+IntroText.Text = "bb"
+IntroText.TextColor3 = Color3.fromRGB(255, 255, 255)
+IntroText.TextSize = 85
+IntroText.Font = Enum.Font.GothamBold
+IntroText.ZIndex = 100000
+IntroText.Parent = IntroFrame
+
+-- ==========================================================
+-- 2. หน้าต่างหลัก (Main UI)
+-- ==========================================================
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 520, 0, 560)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -280)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.BorderSizePixel = 0
+MainFrame.Visible = false
+MainFrame.Active = true
+MainFrame.Draggable = true 
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local MainUIStroke = Instance.new("UIStroke")
+MainUIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+MainUIStroke.Thickness = 3.5
+MainUIStroke.Parent = MainFrame
+
+RunService.RenderStepped:Connect(function()
+    MainUIStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+end)
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 35)
+TitleBar.BackgroundTransparency = 1
+TitleBar.Parent = MainFrame
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -80, 1, 0)
+TitleText.Position = UDim2.new(0, 15, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "B.บล้อกสปิน [BLOCK SPIN HUB]"
+TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextSize = 14
+TitleText.Parent = TitleBar
+
+local MinButton = Instance.new("TextButton")
+MinButton.Size = UDim2.new(0, 35, 0, 35)
+MinButton.Position = UDim2.new(1, -70, 0, 0)
+MinButton.BackgroundTransparency = 1
+MinButton.Text = "-"
+MinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinButton.TextSize = 22
+MinButton.Font = Enum.Font.GothamBold
+MinButton.Parent = TitleBar
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 35, 0, 35)
+CloseButton.Position = UDim2.new(1, -35, 0, 0)
+CloseButton.BackgroundTransparency = 1
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 60, 60)
+CloseButton.TextSize = 18
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = TitleBar
+
+-- ==========================================================
+-- 3. หมวดเมนูฟังก์ชัน
+-- ==========================================================
+local MenuTab = Instance.new("Frame")
+MenuTab.Size = UDim2.new(1, -24, 1, -55)
+MenuTab.Position = UDim2.new(0, 12, 0, 45)
+MenuTab.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MenuTab.Parent = MainFrame
+
+local MenuTabCorner = Instance.new("UICorner")
+MenuTabCorner.CornerRadius = UDim.new(0, 8)
+MenuTabCorner.Parent = MenuTab
+
+local MenuTitle = Instance.new("TextLabel")
+MenuTitle.Size = UDim2.new(1, 0, 0, 30)
+MenuTitle.Position = UDim2.new(0, 15, 0, 5)
+MenuTitle.BackgroundTransparency = 1
+MenuTitle.Text = "หมวด: ฟาร์ม (ออโต้ได้รับรถยกเปิดปกติ Block Spin)"
+MenuTitle.TextColor3 = Color3.fromRGB(220, 220, 220)
+MenuTitle.TextXAlignment = Enum.TextXAlignment.Left
+MenuTitle.Font = Enum.Font.GothamBold
+MenuTitle.TextSize = 11
+MenuTitle.Parent = MenuTab
+
+-- ปุ่ม 1: ออโต้ยกของ / ฟาร์มยกกล่อง (เพิ่มใหม่)
+local LiftToggle = Instance.new("TextButton")
+LiftToggle.Size = UDim2.new(0, 260, 0, 32)
+LiftToggle.Position = UDim2.new(0, 15, 0, 38)
+LiftToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+LiftToggle.Text = "ออโต้ยกของ / ฟาร์มยกกล่อง [OFF]"
+LiftToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+LiftToggle.Font = Enum.Font.GothamBold
+LiftToggle.TextSize = 12
+LiftToggle.Parent = MenuTab
+
+local LiftCorner = Instance.new("UICorner")
+LiftCorner.CornerRadius = UDim.new(0, 6)
+LiftCorner.Parent = LiftToggle
+
+-- ปุ่ม 2: ล่องหน 100%
+local InvisToggle = Instance.new("TextButton")
+InvisToggle.Size = UDim2.new(0, 260, 0, 32)
+InvisToggle.Position = UDim2.new(0, 15, 0, 74)
+InvisToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+InvisToggle.Text = "ล่องหน 100% (คนอื่นไม่เห็น) [OFF]"
+InvisToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+InvisToggle.Font = Enum.Font.GothamBold
+InvisToggle.TextSize = 12
+InvisToggle.Parent = MenuTab
+
+local InvisCorner = Instance.new("UICorner")
+InvisCorner.CornerRadius = UDim.new(0, 6)
+InvisCorner.Parent = InvisToggle
+
+-- ปุ่ม 3: ESP กล่องปกติ
+local ESPToggle = Instance.new("TextButton")
+ESPToggle.Size = UDim2.new(0, 260, 0, 32)
+ESPToggle.Position = UDim2.new(0, 15, 0, 110)
+ESPToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+ESPToggle.Text = "มองทะลุกำแพง (ESP) [OFF]"
+ESPToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+ESPToggle.Font = Enum.Font.GothamBold
+ESPToggle.TextSize = 12
+ESPToggle.Parent = MenuTab
+
+local ESPCorner = Instance.new("UICorner")
+ESPCorner.CornerRadius = UDim.new(0, 6)
+ESPCorner.Parent = ESPToggle
+
+-- ปุ่ม 4: โครงกระดูก Beam สีรุ้ง
+local SkeletonToggle = Instance.new("TextButton")
+SkeletonToggle.Size = UDim2.new(0, 260, 0, 32)
+SkeletonToggle.Position = UDim2.new(0, 15, 0, 146)
+SkeletonToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+SkeletonToggle.Text = "โครงกระดูก Beam สีรุ้ง + ชื่อ [OFF]"
+SkeletonToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+SkeletonToggle.Font = Enum.Font.GothamBold
+SkeletonToggle.TextSize = 12
+SkeletonToggle.Parent = MenuTab
+
+local SkelCorner = Instance.new("UICorner")
+SkelCorner.CornerRadius = UDim.new(0, 6)
+SkelCorner.Parent = SkeletonToggle
+
+-- ปุ่ม 5: เส้นเล็งเท้าไปหัว
+local TracerToggle = Instance.new("TextButton")
+TracerToggle.Size = UDim2.new(0, 260, 0, 32)
+TracerToggle.Position = UDim2.new(0, 15, 0, 182)
+TracerToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+TracerToggle.Text = "เส้นพุ่งจากเท้าไปหัว (ไม่ล็อก) [OFF]"
+TracerToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+TracerToggle.Font = Enum.Font.GothamBold
+TracerToggle.TextSize = 12
+TracerToggle.Parent = MenuTab
+
+local TracerCorner = Instance.new("UICorner")
+TracerCorner.CornerRadius = UDim.new(0, 6)
+TracerCorner.Parent = TracerToggle
+
+-- ปุ่ม 6: ล็อกหัว
+local AimbotToggle = Instance.new("TextButton")
+AimbotToggle.Size = UDim2.new(0, 260, 0, 32)
+AimbotToggle.Position = UDim2.new(0, 15, 0, 218)
+AimbotToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+AimbotToggle.Text = "ล็อกหัวเป้าหมาย (Aimbot) [OFF]"
+AimbotToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+AimbotToggle.Font = Enum.Font.GothamBold
+AimbotToggle.TextSize = 12
+AimbotToggle.Parent = MenuTab
+
+local AimCorner = Instance.new("UICorner")
+AimCorner.CornerRadius = UDim.new(0, 6)
+AimCorner.Parent = AimbotToggle
+
+-- ปุ่ม 7: วง FOV
+local FOVToggle = Instance.new("TextButton")
+FOVToggle.Size = UDim2.new(0, 260, 0, 32)
+FOVToggle.Position = UDim2.new(0, 15, 0, 254)
+FOVToggle.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+FOVToggle.Text = "แสดงวง FOV สีรุ้ง [OFF]"
+FOVToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+FOVToggle.Font = Enum.Font.GothamBold
+FOVToggle.TextSize = 12
+FOVToggle.Parent = MenuTab
+
+local FOVBtnCorner = Instance.new("UICorner")
+FOVBtnCorner.CornerRadius = UDim.new(0, 6)
+FOVBtnCorner.Parent = FOVToggle
+
+-- Slider FOV
+local SliderTitle = Instance.new("TextLabel")
+SliderTitle.Size = UDim2.new(0, 260, 0, 20)
+SliderTitle.Position = UDim2.new(0, 15, 0, 292)
+SliderTitle.BackgroundTransparency = 1
+SliderTitle.Text = "ขนาดวง FOV: " .. FOVRadius
+SliderTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+SliderTitle.TextXAlignment = Enum.TextXAlignment.Left
+SliderTitle.Font = Enum.Font.GothamBold
+SliderTitle.TextSize = 12
+SliderTitle.Parent = MenuTab
+
+local SliderBar = Instance.new("Frame")
+SliderBar.Size = UDim2.new(0, 260, 0, 10)
+SliderBar.Position = UDim2.new(0, 15, 0, 315)
+SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+SliderBar.BorderSizePixel = 0
+SliderBar.Parent = MenuTab
+
+local SliderBarCorner = Instance.new("UICorner")
+SliderBarCorner.CornerRadius = UDim.new(1, 0)
+SliderBarCorner.Parent = SliderBar
+
+local SliderFill = Instance.new("Frame")
+SliderFill.Size = UDim2.new((FOVRadius - 50) / (500 - 50), 0, 1, 0)
+SliderFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+SliderFill.BorderSizePixel = 0
+SliderFill.Parent = SliderBar
+
+local SliderFillCorner = Instance.new("UICorner")
+SliderFillCorner.CornerRadius = UDim.new(1, 0)
+SliderFillCorner.Parent = SliderFill
+
+local SliderButton = Instance.new("TextButton")
+SliderButton.Size = UDim2.new(0, 18, 0, 18)
+SliderButton.Position = UDim2.new(1, -9, 0.5, -9)
+SliderButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+SliderButton.Text = ""
+SliderButton.Parent = SliderFill
+
+local SliderBtnCorner = Instance.new("UICorner")
+SliderBtnCorner.CornerRadius = UDim.new(1, 0)
+SliderBtnCorner.Parent = SliderButton
+
+-- ระบบ Slider
+local draggingSlider = false
+SliderButton.MouseButton1Down:Connect(function() draggingSlider = true end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSlider = false
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if draggingSlider then
+        local mousePos = UserInputService:GetMouseLocation()
+        local barPos = SliderBar.AbsolutePosition
+        local barSize = SliderBar.AbsoluteSize
+        local relativeX = math.clamp((mousePos.X - barPos.X) / barSize.X, 0, 1)
+        SliderFill.Size = UDim2.new(relativeX, 0, 1, 0)
+        FOVRadius = math.floor(50 + (relativeX * (500 - 50)))
+        SliderTitle.Text = "ขนาดวง FOV: " .. FOVRadius
+    end
+end)
+
+-- ==========================================================
+-- 4. ปุ่มย่อหน้าต่าง (TikTok: @bb_official)
+-- ==========================================================
+local MinimizedTab = Instance.new("TextButton")
+MinimizedTab.Size = UDim2.new(0, 180, 0, 40)
+MinimizedTab.Position = UDim2.new(0.5, -90, 0, 15)
+MinimizedTab.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MinimizedTab.Text = MinimizedTabName 
+MinimizedTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinimizedTab.Font = Enum.Font.GothamBold
+MinimizedTab.TextSize = 14
+MinimizedTab.Visible = false
+MinimizedTab.Active = true
+MinimizedTab.Draggable = true
+MinimizedTab.Parent = ScreenGui
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(1, 0) 
+MinCorner.Parent = MinimizedTab
+
+local MinStroke = Instance.new("UIStroke")
+MinStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+MinStroke.Thickness = 2.5
+MinStroke.Parent = MinimizedTab
+
+RunService.RenderStepped:Connect(function()
+    MinStroke.Color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+end)
+
+-- ==========================================================
+-- 5. ระบบทำงาน Auto Lift (ยกของ/ฟาร์มกล่อง)
+-- ==========================================================
+task.spawn(function()
+    while task.wait(0.15) do
+        if AutoLiftEnabled then
+            pcall(function()
+                local char = LocalPlayer.Character
+                if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+                -- ตรวจหาจุดกด ProximityPrompt เพื่อรับ/วางของ
+                for _, prompt in ipairs(Workspace:GetDescendants()) do
+                    if prompt:IsA("ProximityPrompt") and prompt.Enabled then
+                        local parentPart = prompt.Parent
+                        if parentPart and parentPart:IsA("BasePart") then
+                            local dist = (char.HumanoidRootPart.Position - parentPart.Position).Magnitude
+                            if dist < 25 then
+                                fireproximityprompt(prompt)
+                                showNotify("ตรวจพบการเทเลพอร์ต")
+                                task.wait(0.05)
+                            end
+                        end
+                    end
+                end
+
+                -- ถือ/วาง Tool กล่องโดยอัตโนมัติ
+                for _, item in ipairs(char:GetChildren()) do
+                    if item:IsA("Tool") then
+                        item:Activate()
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ==========================================================
+-- 6. ควบคุมปุ่มเปิด/ปิด
+-- ==========================================================
+LiftToggle.MouseButton1Click:Connect(function()
+    AutoLiftEnabled = not AutoLiftEnabled
+    if AutoLiftEnabled then
+        LiftToggle.Text = "ออโต้ยกของ / ฟาร์มยกกล่อง [ON]"
+        LiftToggle.TextColor3 = Color3.fromRGB(60, 255, 60)
+        showNotify("เปิดระบบยกของออโต้แล้ว")
+    else
+        LiftToggle.Text = "ออโต้ยกของ / ฟาร์มยกกล่อง [OFF]"
+        LiftToggle.TextColor3 = Color3.fromRGB(255, 60, 60)
+    end
+end)
+
+InvisToggle.MouseButton1Click:Connect(function()
+    InvisibleEnabled = not InvisibleEnabled
+    InvisToggle.Text = InvisibleEnabled and "ล่องหน 100% (คนอื่นไม่เห็น) [ON]" or "ล่องหน 100% (คนอื่นไม่เห็น) [OFF]"
+    InvisToggle.TextColor3 = InvisibleEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+end)
+
+ESPToggle.MouseButton1Click:Connect(function()
+    ESPEnabled = not ESPEnabled
+    ESPToggle.Text = ESPEnabled and "มองทะลุกำแพง (ESP) [ON]" or "มองทะลุกำแพง (ESP) [OFF]"
+    ESPToggle.TextColor3 = ESPEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+end)
+
+SkeletonToggle.MouseButton1Click:Connect(function()
+    SkeletonESPEnabled = not SkeletonESPEnabled
+    SkeletonToggle.Text = SkeletonESPEnabled and "โครงกระดูก Beam สีรุ้ง + ชื่อ [ON]" or "โครงกระดูก Beam สีรุ้ง + ชื่อ [OFF]"
+    SkeletonToggle.TextColor3 = SkeletonESPEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+end)
+
+TracerToggle.MouseButton1Click:Connect(function()
+    TracerEnabled = not TracerEnabled
+    TracerToggle.Text = TracerEnabled and "เส้นพุ่งจากเท้าไปหัว (ไม่ล็อก) [ON]" or "เส้นพุ่งจากเท้าไปหัว (ไม่ล็อก) [OFF]"
+    TracerToggle.TextColor3 = TracerEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+end)
+
+AimbotToggle.MouseButton1Click:Connect(function()
+    AimbotEnabled = not AimbotEnabled
+    AimbotToggle.Text = AimbotEnabled and "ล็อกหัวเป้าหมาย (Aimbot) [ON]" or "ล็อกหัวเป้าหมาย (Aimbot) [OFF]"
+    AimbotToggle.TextColor3 = AimbotEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+end)
+
+FOVToggle.MouseButton1Click:Connect(function()
+    FOVEnabled = not FOVEnabled
+    FOVToggle.Text = FOVEnabled and "แสดงวง FOV สีรุ้ง [ON]" or "แสดงวง FOV สีรุ้ง [OFF]"
+    FOVToggle.TextColor3 = FOVEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+end)
+
+MinButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    MinimizedTab.Visible = true
+end)
+
+MinimizedTab.MouseButton1Click:Connect(function()
+    MinimizedTab.Visible = false
+    MainFrame.Visible = true
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+    AutoLiftEnabled = false
+    ScreenGui:Destroy()
+end)
+
+-- รัน Intro 5 วินาที
+task.spawn(function()
+    task.wait(5)
+    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local fadeOut = TweenService:Create(IntroFrame, tweenInfo, {BackgroundTransparency = 1})
+    local textFade = TweenService:Create(IntroText, tweenInfo, {TextTransparency = 1})
+    
+    fadeOut:Play()
+    textFade:Play()
+    
+    fadeOut.Completed:Wait()
+    IntroFrame:Destroy()
+    MainFrame.Visible = true
+end)
